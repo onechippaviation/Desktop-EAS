@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EMERGENCY ALERT</title>
+    <style>
+        body {
+            background-color: #d32f2f;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid white;
+            padding-bottom: 20px;
+        }
+        h1 { font-size: 42px; margin: 0; text-transform: uppercase; }
+        .close-btn {
+            background: white;
+            color: #d32f2f;
+            border: none;
+            font-size: 28px;
+            font-weight: bold;
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .close-btn:hover { background: #f8d7da; }
+        .content {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            border-radius: 8px;
+            font-size: 22px;
+            line-height: 1.6;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .footer {
+            font-size: 14px;
+            opacity: 0.8;
+            text-align: center;
+            border-top: 1px solid rgba(255,255,255,0.4);
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="alertTitle">🚨 EMERGENCY WARNING</h1>
+        <button class="close-btn" onclick="closeAlert()" title="Dismiss Alert">✕</button>
+    </div>
+    
+    <div class="content" id="alertBody">
+        Loading emergency broadcast details...
+    </div>
+
+    <div class="footer">
+        Desktop EAS Client • Independent Utility (Not affiliated with the NWS)
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        ipcRenderer.on('set-alert-data', (event, data) => {
+            document.getElementById('alertTitle').innerText = `🚨 ${data.event || 'EMERGENCY WARNING'}`;
+            document.getElementById('alertBody').innerHTML = `
+                <h2>${data.headline || 'Active Hazard Issued'}</h2>
+                <p>${data.description || 'No detailed description available.'}</p>
+            `;
+        });
+
+        function closeAlert() {
+            // Signal main process to dismiss alert windows across all screens
+            ipcRenderer.send('dismiss-alert');
+        }
+    </script>
+</body>
+</html>

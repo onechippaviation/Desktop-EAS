@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Desktop EAS - Setup & Location</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa; color: #333; }
+        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .disclaimer-box { background: #fff3cd; border-left: 5px solid #ffc107; padding: 12px; margin-bottom: 15px; font-size: 13px; line-height: 1.4; }
+        textarea { width: 100%; height: 80px; margin-bottom: 15px; font-size: 12px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; resize: none; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        .input-group input { padding: 8px; width: 150px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+        .btn-auto { background: #28a745; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; }
+        .btn-save { background: #007bff; color: white; border: none; padding: 10px 18px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
+        .divider { margin: 15px 0; font-weight: bold; color: #666; font-size: 13px; }
+        #statusText { font-size: 13px; color: #007bff; font-weight: bold; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Desktop EAS Client Setup</h2>
+        
+        <div class="disclaimer-box">
+            <strong>Important Notice:</strong> This software is an independent emergency notification utility and is <b>not affiliated with, endorsed by, or connected to the National Weather Service (NWS)</b>.
+        </div>
+
+        <div class="input-group">
+            <button type="button" class="btn-auto" onclick="autoDetectLocation()">📍 Auto-Detect My Location</button>
+            <div id="statusText"></div>
+            
+            <div class="divider">— OR —</div>
+
+            <label for="zipInput">Enter ZIP Code Manually:</label>
+            <input type="text" id="zipInput" placeholder="e.g. 29607" maxlength="5">
+        </div>
+
+        <p>Please review the End User License Agreement (EULA):</p>
+        <textarea readonly>
+END USER LICENSE AGREEMENT & DISCLAIMER
+
+1. NON-AFFILIATION DISCLAIMER:
+This software application ("Desktop EAS Client") is an independent notification tool. It is NOT affiliated with, endorsed by, funded by, or connected to the National Weather Service (NWS), NOAA, or any other local, state, or federal government entity.
+
+2. SERVICE AVAILABILITY:
+This application relies on active internet connectivity. Uninterrupted delivery is not guaranteed.
+        </textarea>
+
+        <label>
+            <input type="checkbox" id="acceptCheck" onchange="toggleButton()"> I accept the terms and acknowledge the NWS non-affiliation disclaimer.
+        </label>
+        <br><br>
+        <button id="proceedBtn" class="btn-save" disabled onclick="completeSetup()">Save & Minimize to Tray</button>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let detectedCoords = null;
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const configData = await ipcRenderer.invoke('get-config');
+                if (configData) {
+                    if (configData.zipCode) {
+                        document.getElementById('zipInput').value = configData.zipCode;
+                    } else if (configData.lat && configData.lon) {
+                        document.getElementById('statusText').innerText = `Saved Location: (${configData.lat}, ${configData.lon})`;
+                        detectedCoords = { lat: configData.lat, lon: configData.lon };
+                    }
+                    toggleButton();
+                }
+            } catch (e) {
+                console.error('Error loading config:', e);
+            }
+        });
+
+        async function autoDetectLocation() {
+            const status = document.getElementById('statusText');
+            status.innerText = "Detecting location via network...";
+
+            try {
+                const result = await ipcRenderer.invoke('auto-detect-ip');
+                if (result && result.lat && result.lon) {
+                    detectedCoords = { lat: result.lat, lon: result.lon };
+                    document.getElementById('zipInput').value = ''; // Clear manual ZIP
+                    status.innerText = `Detected: ${result.city}, ${result.region} (${result.lat}, ${result.lon})`;
+                    toggleButton();
+                } else {
+                    status.innerText = "Auto-detection failed. Please use manual ZIP code.";
+                }
+            } catch (err) {
+                console.error('Auto-detect error:', err);
+                status.innerText = "Auto-detection error occurred.";
+            }
+        }
+
+        function toggleButton() {
+            const isChecked = document.getElementById('acceptCheck').checked;
+            const zipVal = document.getElementById('zipInput').value.trim();
+            const hasValidZip = zipVal.length === 5;
+            const hasCoords = detectedCoords !== null;
+
+            document.getElementById('proceedBtn').disabled = !isChecked || (!hasValidZip && !hasCoords);
+        }
+
+        document.getElementById('zipInput').addEventListener('input', () => {
+            if (document.getElementById('zipInput').value.trim().length > 0) {
+                detectedCoords = null; 
+                document.getElementById('statusText').innerText = "";
+            }
+            toggleButton();
+        });
+
+        function completeSetup() {
+            const zip = document.getElementById('zipInput').value.trim();
+            
+            let configPayload = {};
+            if (detectedCoords) {
+                configPayload = { type: 'coords', lat: detectedCoords.lat, lon: detectedCoords.lon };
+            } else if (zip.length === 5) {
+                configPayload = { type: 'zip', zipCode: zip };
+            } else {
+                alert('Please enter a valid 5-digit ZIP code or use Auto-Detect.');
+                return;
+            }
+
+            ipcRenderer.send('save-config', configPayload);
+            alert('Configuration saved! The app will now run silently in your system tray.');
+        }
+    </script>
+</body>
+</html>
